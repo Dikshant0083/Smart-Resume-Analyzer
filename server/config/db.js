@@ -7,32 +7,33 @@ if (!globalWithMongoose._mongoose) {
 }
 
 const connectDB = async () => {
+  // Return cached connection if available
   if (globalWithMongoose._mongoose.conn) {
     return globalWithMongoose._mongoose.conn
   }
 
+  // Start new connection if no pending promise
   if (!globalWithMongoose._mongoose.promise) {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/resumeiq'
 
-    globalWithMongoose._mongoose.promise = mongoose
-      .connect(uri, {
-        bufferCommands: false,
-        serverSelectionTimeoutMS: 10000, // fail fast — 10s instead of 300s
-        connectTimeoutMS: 10000,
-      })
-      .then((mongooseInstance) => {
-        globalWithMongoose._mongoose.conn = mongooseInstance
-        console.log(`MongoDB Connected: ${mongooseInstance.connection.host}`)
-        return mongooseInstance
-      })
-      .catch((error) => {
-        // Reset promise so next request retries
-        globalWithMongoose._mongoose.promise = null
-        console.error(`MongoDB Connection Error: ${error.message}`)
-        throw error // throw — never process.exit() in serverless
-      })
+    globalWithMongoose._mongoose.promise = mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      // bufferCommands: true (default) — allow queries to queue while connecting
+    })
+    .then((mongooseInstance) => {
+      globalWithMongoose._mongoose.conn = mongooseInstance
+      console.log(`MongoDB Connected: ${mongooseInstance.connection.host}`)
+      return mongooseInstance
+    })
+    .catch((error) => {
+      globalWithMongoose._mongoose.promise = null
+      console.error(`MongoDB Connection Error: ${error.message}`)
+      throw error
+    })
   }
 
+  // Await the pending connection
   return globalWithMongoose._mongoose.promise
 }
 
