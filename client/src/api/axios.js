@@ -1,26 +1,29 @@
 import axios from 'axios'
 
-const rawApiUrl = import.meta.env.VITE_API_URL || '/api'
-const normalizedApiUrl = rawApiUrl.trim().replace(/\/+$|^\s+|\s+$/g, '')
-const API_URL = normalizedApiUrl.startsWith('/') ? normalizedApiUrl : `/${normalizedApiUrl}`
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 const api = axios.create({
   baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
-// Request interceptor to add auth token
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+
     return config
   },
   (error) => Promise.reject(error)
 )
 
-// Response interceptor to handle errors
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -28,6 +31,7 @@ api.interceptors.response.use(
       localStorage.removeItem('token')
       window.location.href = '/login'
     }
+
     return Promise.reject(error)
   }
 )

@@ -1,82 +1,34 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { authAPI } from '@/api'
+import { createContext, useContext, useCallback } from 'react'
+import { useAuthStore } from '@/store/authStore'
 
+// AuthContext delegates entirely to the Zustand authStore
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const store = useAuthStore()
+  return <AuthContext.Provider value={store}>{children}</AuthContext.Provider>
+}
 
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      fetchCurrentUser()
-    } else {
-      setIsLoading(false)
-    }
-  }, [])
-
-  const fetchCurrentUser = async () => {
-    try {
-      const data = await authAPI.getCurrentUser()
-      setUser(data.user)
-    } catch (err) {
-      localStorage.removeItem('token')
-      setError(err.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const login = async (credentials) => {
-    setError(null)
-    try {
-      const data = await authAPI.login(credentials)
-      localStorage.setItem('token', data.token)
-      setUser(data.user)
-      return data
-    } catch (err) {
-      setError(err.response?.data?.message || 'Login failed')
-      throw err
-    }
-  }
-
-  const register = async (userData) => {
-    setError(null)
-    try {
-      const data = await authAPI.register(userData)
-      localStorage.setItem('token', data.token)
-      setUser(data.user)
-      return data
-    } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed')
-      throw err
-    }
-  }
-
-  const logout = () => {
-    localStorage.removeItem('token')
-    setUser(null)
-  }
-
-  const value = {
+// useAuth — primary hook used across the app
+export function useAuth() {
+  const {
     user,
     isLoading,
     error,
-    login,
-    register,
-    logout,
-    isAuthenticated: !!user,
-  }
+    login: storeLogin,
+    register: storeRegister,
+    loginWithProvider: storeLoginWithProvider,
+    logout: storeLogout,
+    clearError: storeClearError,
+  } = useAuthStore()
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
+  const isAuthenticated = !!user && !!localStorage.getItem('token')
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+  const login = useCallback((credentials) => storeLogin(credentials), [storeLogin])
+  const register = useCallback((userData) => storeRegister(userData), [storeRegister])
+  const loginWithProvider = useCallback((provider) => storeLoginWithProvider(provider), [storeLoginWithProvider])
+  const logout = useCallback(() => storeLogout(), [storeLogout])
+  const clearError = useCallback(() => storeClearError(), [storeClearError])
+
+  return { user, isLoading, error, isAuthenticated, login, register, loginWithProvider, logout, clearError }
 }

@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import { authAPI } from '@/api'
 import { auth, githubProvider, googleProvider } from '@/firebase'
-import { signInWithPopup, signOut } from 'firebase/auth'
+import {
+  signInWithPopup,
+  signOut
+} from 'firebase/auth'
 
 const readStoredUser = () => {
   if (typeof window === 'undefined') {
@@ -28,14 +31,8 @@ const clearSession = () => {
 }
 
 const firebaseProviders = {
-  google: {
-    popupProvider: googleProvider,
-    provider: 'google',
-  },
-  github: {
-    popupProvider: githubProvider,
-    provider: 'github',
-  },
+  google: googleProvider,
+  github: githubProvider,
 }
 
 const getAuthErrorMessage = (error, fallback) => {
@@ -44,14 +41,18 @@ const getAuthErrorMessage = (error, fallback) => {
   }
 
   switch (error.code) {
+    case 'auth/popup-blocked':
+      return 'Popup was blocked by your browser. Please allow popups for this site and try again.'
     case 'auth/popup-closed-by-user':
-      return 'Sign-in popup was closed before authentication completed'
+      return 'Sign-in window was closed before authentication completed.'
     case 'auth/cancelled-popup-request':
-      return 'Another sign-in popup is already open'
+      return 'Another sign-in request is already in progress.'
     case 'auth/account-exists-with-different-credential':
-      return 'An account with this email already exists using a different sign-in method'
+      return 'An account already exists with the same email but different sign-in credentials.'
     case 'auth/unauthorized-domain':
-      return 'This domain is not allowed in your Firebase authentication settings'
+      return 'This domain is not authorized in Firebase. Please contact support.'
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your connection and try again.'
     default:
       return error.message || fallback
   }
@@ -62,75 +63,92 @@ export const useAuthStore = create((set) => ({
   isLoading: false,
   error: null,
 
-  setUser: (user) => {
-    if (user) {
-      localStorage.setItem('user', JSON.stringify(user))
-    } else {
-      localStorage.removeItem('user')
-    }
-    set({ user })
-  },
-
+  // Email/password login
   login: async (credentials) => {
     set({ isLoading: true, error: null })
+
     try {
       const data = await authAPI.login(credentials)
       persistSession(data)
-      set({ user: data.user, isLoading: false })
+      set({
+        user: data.user,
+        isLoading: false,
+        error: null,
+      })
       return data
     } catch (error) {
-      const message = getAuthErrorMessage(error, 'Login failed')
+      const message = getAuthErrorMessage(error, 'Login failed. Please check your credentials.')
       set({ error: message, isLoading: false })
       throw error
     }
   },
 
+  // Email/password registration
   register: async (userData) => {
     set({ isLoading: true, error: null })
+
     try {
       const data = await authAPI.register(userData)
       persistSession(data)
-      set({ user: data.user, isLoading: false })
+      set({
+        user: data.user,
+        isLoading: false,
+        error: null,
+      })
       return data
     } catch (error) {
-      const message = getAuthErrorMessage(error, 'Registration failed')
+      const message = getAuthErrorMessage(error, 'Registration failed. Please try again.')
       set({ error: message, isLoading: false })
       throw error
     }
   },
 
+  // Google / GitHub OAuth via popup (works on localhost AND Vercel)
   loginWithProvider: async (providerKey) => {
-    const providerConfig = firebaseProviders[providerKey]
+    const provider = firebaseProviders[providerKey]
 
-    if (!providerConfig) {
-      const error = new Error('Unsupported Firebase auth provider')
-      set({ error: error.message })
-      throw error
+    if (!provider) {
+      throw new Error('Unsupported sign-in provider: ' + providerKey)
     }
 
     set({ isLoading: true, error: null })
 
     try {
-      const result = await signInWithPopup(auth, providerConfig.popupProvider)
+      // signInWithPopup works reliably on all environments
+      const result = await signInWithPopup(auth, provider)
+
+      const providerName = result.providerId === 'github.com' ? 'github' : 'google'
       const idToken = await result.user.getIdToken()
 
       const data = await authAPI.firebaseLogin({
         idToken,
-        provider: providerConfig.provider,
+        provider: providerName,
         name: result.user.displayName,
         avatar: result.user.photoURL,
       })
 
       persistSession(data)
-      set({ user: data.user, isLoading: false })
+
+      set({
+        user: data.user,
+        isLoading: false,
+        error: null,
+      })
+
       return data
     } catch (error) {
+      // Sign out from Firebase if backend call failed
       await signOut(auth).catch(() => {})
 
-      const message = getAuthErrorMessage(error, 'Social sign-in failed')
+      const message = getAuthErrorMessage(error, 'Social sign-in failed. Please try again.')
       set({ error: message, isLoading: false })
       throw error
     }
+  },
+
+  // Clear error state (useful to reset error on form change)
+  clearError: () => {
+    set({ error: null })
   },
 
   logout: () => {
@@ -138,24 +156,4 @@ export const useAuthStore = create((set) => ({
     signOut(auth).catch(() => {})
     set({ user: null, error: null })
   },
-
-  updateProfile: async (payload) => {
-    set({ isLoading: true, error: null })
-    try {
-      const data = await authAPI.updateProfile(payload)
-      // Update persisted session token remains same; replace stored user
-      const token = localStorage.getItem('token')
-      if (token) {
-        localStorage.setItem('user', JSON.stringify(data.user))
-      }
-      set({ user: data.user, isLoading: false })
-      return data
-    } catch (error) {
-      const message = (error.response && error.response.data && error.response.data.message) || error.message || 'Failed to update profile'
-      set({ error: message, isLoading: false })
-      throw error
-    }
-  },
-
-  clearError: () => set({ error: null }),
 }))
