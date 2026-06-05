@@ -1,40 +1,34 @@
 import mongoose from 'mongoose'
 
-const globalWithMongoose = globalThis
-
-if (!globalWithMongoose._mongoose) {
-  globalWithMongoose._mongoose = { conn: null, promise: null }
-}
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/resumeiq'
 
 const connectDB = async () => {
-  // Return cached connection if available
-  if (globalWithMongoose._mongoose.conn) {
-    return globalWithMongoose._mongoose.conn
+  // readyState: 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+  const state = mongoose.connection.readyState
+
+  if (state === 1) {
+    return mongoose.connection // already connected and alive
   }
 
-  // Start new connection if no pending promise
-  if (!globalWithMongoose._mongoose.promise) {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/resumeiq'
-
-    globalWithMongoose._mongoose.promise = mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000,
-      // bufferCommands: true (default) — allow queries to queue while connecting
-    })
-    .then((mongooseInstance) => {
-      globalWithMongoose._mongoose.conn = mongooseInstance
-      console.log(`MongoDB Connected: ${mongooseInstance.connection.host}`)
-      return mongooseInstance
-    })
-    .catch((error) => {
-      globalWithMongoose._mongoose.promise = null
-      console.error(`MongoDB Connection Error: ${error.message}`)
-      throw error
-    })
+  // If previous connection is in a bad state, disconnect cleanly first
+  if (state !== 0) {
+    try {
+      await mongoose.disconnect()
+    } catch (_) {}
   }
 
-  // Await the pending connection
-  return globalWithMongoose._mongoose.promise
+  await mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 15000, // fail fast if Atlas is unreachable
+    socketTimeoutMS: 30000,          // fail fast if query hangs (not 300s)
+    connectTimeoutMS: 15000,
+    bufferCommands: false,           // don't buffer — fail immediately on bad connection
+    maxPoolSize: 1,                  // single connection for serverless
+    minPoolSize: 0,
+    retryWrites: true,
+  })
+
+  console.log(`MongoDB Connected: ${mongoose.connection.host}`)
+  return mongoose.connection
 }
 
 export default connectDB
