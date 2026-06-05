@@ -93,7 +93,7 @@ export const analysisAPI = {
   },
 
   exportPDF: async (id) => {
-    const response = await api.get(`/api/analysis/${id}/export`, {
+    const response = await api.get(API_ENDPOINTS.analysis.get(id) + '/export', {
       responseType: 'blob',
     })
     return response.data
