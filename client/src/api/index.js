@@ -34,11 +34,7 @@ export const authAPI = {
 
 export const resumeAPI = {
   upload: async (formData) => {
-    const response = await api.post(API_ENDPOINTS.resume.upload, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    const response = await api.post(API_ENDPOINTS.resume.upload, formData)
     return response.data
   },
 

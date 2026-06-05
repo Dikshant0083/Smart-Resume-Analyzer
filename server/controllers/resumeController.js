@@ -1,8 +1,11 @@
+import axios from 'axios'
+import path from 'path'
 import Resume from '../models/Resume.js'
 import User from '../models/User.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { extractTextFromPDF } from '../services/pdfParser.js'
 import { extractSkills, extractEducation, extractExperience } from '../services/nlpExtractor.js'
+import cloudinary from '../config/cloudinary.js'
 
 const buildTextContentFromData = (data) => {
   const chunks = []
@@ -37,31 +40,67 @@ const buildTextContentFromData = (data) => {
   return chunks.filter(Boolean).join(' ')
 }
 
+const uploadBufferToCloudinary = (buffer, originalName) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'resumeiq',
+        resource_type: 'raw',
+        public_id: `resume_${Date.now()}_${path.parse(originalName).name}`,
+        format: 'pdf'
+      },
+      (error, result) => {
+        if (error) {
+          return reject(error)
+        }
+        resolve(result)
+      }
+    )
+
+    uploadStream.end(buffer)
+  })
+}
+
 // @desc    Upload resume
 // @route   POST /api/resume
 // @access  Private
 export const uploadResume = asyncHandler(async (req, res) => {
-  if (!req.file) {
+  if (!req.file || !req.file.buffer) {
     return res.status(400).json({
       success: false,
-      message: 'Please upload a file'
+      message: 'Please upload a PDF file'
     })
   }
 
-  // Extract text from PDF
-  const textContent = await extractTextFromPDF(req.file.path)
+  const fileBuffer = req.file.buffer
+  const originalName = req.file.originalname || 'resume.pdf'
 
-  // Extract structured data
+  const textContent = await extractTextFromPDF(fileBuffer)
   const skills = extractSkills(textContent)
   const education = extractEducation(textContent)
   const experience = extractExperience(textContent)
 
+  let uploadResult
+  try {
+    uploadResult = await uploadBufferToCloudinary(fileBuffer, originalName)
+  } catch (error) {
+    console.error('Cloudinary upload failed:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload resume to Cloudinary'
+    })
+  }
+
+  const uploadedUrl = uploadResult.secure_url || uploadResult.url
+  const cloudinaryId = uploadResult.public_id || uploadResult.filename || ''
+
   const resume = await Resume.create({
     user: req.user.id,
-    originalName: req.file.originalname,
-    fileName: req.file.filename,
-    filePath: req.file.path,
-    fileSize: req.file.size,
+    originalName,
+    fileName: originalName,
+    fileUrl: uploadedUrl,
+    cloudinaryId,
+    fileSize: req.file.size || 0,
     textContent,
     extractedData: {
       skills,
@@ -70,7 +109,6 @@ export const uploadResume = asyncHandler(async (req, res) => {
     }
   })
 
-  // Update user resume count
   await User.findByIdAndUpdate(req.user.id, {
     $inc: { resumeCount: 1 }
   })
@@ -147,9 +185,15 @@ export const exportResumePDF = asyncHandler(async (req, res) => {
     })
   }
 
-  // For uploaded resumes, send the original file when file exists.
-  if (resume.filePath) {
-    return res.download(resume.filePath, resume.originalName)
+  if (resume.fileUrl) {
+    const cloudinaryResponse = await axios.get(resume.fileUrl, {
+      responseType: 'stream'
+    })
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${resume.originalName || 'resume'}.pdf"`)
+
+    return cloudinaryResponse.data.pipe(res)
   }
 
   // Generate PDF for builder resumes
@@ -396,9 +440,17 @@ export const deleteResume = asyncHandler(async (req, res) => {
     })
   }
 
+  const cloudinaryId = resume.cloudinaryId || resume.filePublicId
+  if (cloudinaryId) {
+    try {
+      await cloudinary.uploader.destroy(cloudinaryId, { resource_type: 'raw' })
+    } catch (error) {
+      console.error('Failed to delete resume from Cloudinary:', error)
+    }
+  }
+
   await resume.deleteOne()
 
-  // Update user resume count
   await User.findByIdAndUpdate(req.user.id, {
     $inc: { resumeCount: -1 }
   })

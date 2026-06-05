@@ -14,7 +14,11 @@ const resumeSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  filePath: {
+  fileUrl: {
+    type: String,
+    default: ''
+  },
+  cloudinaryId: {
     type: String,
     default: ''
   },

@@ -1,22 +1,14 @@
 import multer from 'multer'
 import path from 'path'
-import { fileURLToPath } from 'url'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../uploads'))
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueSuffix + path.extname(file.originalname))
-  }
-})
+const storage = multer.memoryStorage()
 
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'application/pdf') {
+  const fileExtension = path.extname(file.originalname).toLowerCase()
+  const isPdfMimeType = file.mimetype === 'application/pdf'
+  const isPdfExtension = file.mimetype === 'application/octet-stream' && fileExtension === '.pdf'
+
+  if (isPdfMimeType || isPdfExtension) {
     cb(null, true)
   } else {
     cb(new Error('Only PDF files are allowed'), false)
@@ -24,11 +16,11 @@ const fileFilter = (req, file, cb) => {
 }
 
 const upload = multer({
-  storage: storage,
+  storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 4 * 1024 * 1024 // 4MB - Vercel serverless request body safe limit
   },
-  fileFilter: fileFilter
+  fileFilter
 })
 
 export default upload

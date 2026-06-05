@@ -39,9 +39,6 @@ app.use(cors({
 // Rate limiting - more permissive for development
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 }))
 
-// Static files for uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
-
 // Mount routes
 app.use('/api/auth', authRoutes)
 app.use('/api/resume', resumeRoutes)
@@ -58,8 +55,10 @@ app.use(errorHandler)
 
 const PORT = process.env.PORT || 5000
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`)
+  })
+}
 
 export default app
