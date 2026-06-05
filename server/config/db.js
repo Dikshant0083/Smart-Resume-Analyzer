@@ -12,9 +12,13 @@ const connectDB = async () => {
   }
 
   if (!globalWithMongoose._mongoose.promise) {
+    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/resumeiq'
+
     globalWithMongoose._mongoose.promise = mongoose
-      .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/resumeiq', {
+      .connect(uri, {
         bufferCommands: false,
+        serverSelectionTimeoutMS: 10000, // fail fast — 10s instead of 300s
+        connectTimeoutMS: 10000,
       })
       .then((mongooseInstance) => {
         globalWithMongoose._mongoose.conn = mongooseInstance
@@ -22,8 +26,10 @@ const connectDB = async () => {
         return mongooseInstance
       })
       .catch((error) => {
-        console.error(`Error: ${error.message}`)
-        process.exit(1)
+        // Reset promise so next request retries
+        globalWithMongoose._mongoose.promise = null
+        console.error(`MongoDB Connection Error: ${error.message}`)
+        throw error // throw — never process.exit() in serverless
       })
   }
 
