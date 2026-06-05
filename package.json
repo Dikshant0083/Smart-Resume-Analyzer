@@ -3,33 +3,33 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "client",
-    "server"
-  ],
   "description": "ResumeIQ monorepo for frontend and backend",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm run dev",
-    "install-all": "npm install && cd client && npm install && cd ../server && npm install",
     "build": "cd client && npm install && npm run build",
-    "start": "cd server && npm start",
-    "vercel-install": "cd client && npm install && cd ../server && npm install"
+    "start": "cd server && npm start"
   },
-  "keywords": [
-    "resume",
-    "analyzer",
-    "job",
-    "matching",
-    "ai"
-  ],
+  "keywords": ["resume", "analyzer", "job", "matching", "ai"],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "serverless-http": "^3.0.0",
+    "axios": "^1.6.7",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.1.1",
+    "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary": "^4.0.0",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.13.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "serverless-http": "^3.0.0"
   }
 }
