@@ -1,0 +1,16 @@
+{
+  "name": "resumeiq",
+  "version": "1.0.0",
+  "description": "Smart Resume Analyzer - AI-powered resume analysis and job matching",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install-all": "npm install && cd client && npm install && cd ../server && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start"
+  },
+  "keywords": ["resume", "analyzer", "job", "matching", "ai"],
+  "author": "",
+  "license": "MIT"
+}
